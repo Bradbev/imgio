@@ -1,9 +1,11 @@
 package imgio
 
 import (
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/color"
+	"os"
 	"regexp"
 	"strings"
 
@@ -220,48 +222,99 @@ func (w *WindowManager) Layout(gtx layout.Context) {
 }
 
 type Window struct {
-	Parent         *WindowManager
-	Pos            f32.Point
-	Size           f32.Point
-	windowStartPos f32.Point
-	drag           gesture.Drag
+	Pos           f32.Point
+	Size          f32.Point
+	parent        *WindowManager
+	dragStartPos  f32.Point
+	dragStartSize f32.Point
+	drag          gesture.Drag
+	closeButton   widget.Clickable
+	closed        bool
+	im            *Im
 }
 
 func (w *Window) Layout(gtx layout.Context, child func(gtx layout.Context) layout.Dimensions) layout.Dimensions {
+	if w.closeButton.Clicked(gtx) {
+		w.closed = true
+	}
+
 	// Apply the window constraints.
 	gtx.Constraints.Max = w.Size.Round()
 
 	// Move the window
-	trans := op.Offset(w.Pos.Round()).Push(gtx.Ops)
-	defer trans.Pop()
+	defer op.Offset(w.Pos.Round()).Push(gtx.Ops).Pop()
 
 	// restrict to the window
-	area := clip.Rect(image.Rect(0, 0, int(w.Size.X), int(w.Size.Y))).Push(gtx.Ops)
-	// paint the window background
-	paint.ColorOp{Color: color.NRGBA{G: 0x80, A: 0xFF}}.Add(gtx.Ops)
-	paint.PaintOp{}.Add(gtx.Ops)
-	titlebarHeight := unit.Dp(25)
-	titlebar := clip.Rect(image.Rect(0, 0, int(w.Size.X), gtx.Metric.Dp(titlebarHeight))).Push(gtx.Ops)
-	paint.ColorOp{Color: color.NRGBA{R: 0x80, A: 0xFF}}.Add(gtx.Ops)
-	paint.PaintOp{}.Add(gtx.Ops)
-	// register for titlebar events.  Using a pointer to a member just for uniqueness
-	event.Op(gtx.Ops, w)
-	titlebar.Pop()
+	func() {
+		defer clip.Rect(image.Rect(0, 0, int(w.Size.X), int(w.Size.Y))).Push(gtx.Ops).Pop()
+		// paint the window background
+		paint.ColorOp{Color: color.NRGBA{G: 0x80, A: 0xFF}}.Add(gtx.Ops)
+		paint.PaintOp{}.Add(gtx.Ops)
+	}()
+
+	titlebarHeight := unit.Dp(35)
+	// titlebar
+	func() {
+		defer clip.Rect(image.Rect(0, 0, int(w.Size.X), gtx.Metric.Dp(titlebarHeight))).Push(gtx.Ops).Pop()
+		paint.ColorOp{Color: color.NRGBA{R: 0x80, A: 0xFF}}.Add(gtx.Ops)
+		paint.PaintOp{}.Add(gtx.Ops)
+		// register for titlebar events.  Using a pointer to a member just for uniqueness
+		event.Op(gtx.Ops, w)
+
+		titleGtx := gtx
+		titleGtx.Constraints.Max = image.Pt(int(w.Size.X), gtx.Metric.Dp(titlebarHeight))
+		layout.UniformInset(unit.Dp(2)).Layout(titleGtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{}.Layout(gtx,
+				layout.Flexed(1, material.Body1(gTheme, "name").Layout),
+				layout.Rigid(material.Button(gTheme, &w.closeButton, "X").Layout),
+			)
+		})
+	}()
+
+	// Layout the child
 	layout.Inset{Top: titlebarHeight}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return child(gtx)
 	})
 
-	area.Pop()
+	// draw the corner resize triangle
+	func() {
+		p := clip.Path{}
+		p.Begin(gtx.Ops)
+		p.MoveTo(w.Size)
+		p.Line(f32.Pt(0, -40))
+		p.Line(f32.Pt(-40, 40))
+		defer clip.Outline{Path: p.End()}.Op().Push(gtx.Ops).Pop()
+		paint.ColorOp{Color: color.NRGBA{B: 0x80, A: 0xFF}}.Add(gtx.Ops)
+		paint.PaintOp{}.Add(gtx.Ops)
+		event.Op(gtx.Ops, &w.Pos)
+	}()
 
+	// corner dragging for resize
+	forEvent(gtx.Source, pointer.Filter{
+		Target: &w.Pos,
+		Kinds:  pointer.Drag | pointer.Press,
+	}, func(e pointer.Event) bool {
+		switch e.Kind {
+		case pointer.Press:
+			w.dragStartPos = w.Pos
+			w.dragStartSize = w.Size
+		case pointer.Drag:
+			w.Size = w.dragStartSize.Add(w.parent.globalPos.Sub(w.parent.dragStartPos))
+		}
+		//fmt.Printf("corner %v %v\n", w, e.Position)
+		return true
+	})
+
+	// title bar dragging for position
 	forEvent(gtx.Source, pointer.Filter{
 		Target: w,
 		Kinds:  pointer.Drag | pointer.Press,
 	}, func(e pointer.Event) bool {
 		switch e.Kind {
 		case pointer.Press:
-			w.windowStartPos = w.Pos
+			w.dragStartPos = w.Pos
 		case pointer.Drag:
-			w.Pos = w.windowStartPos.Add(w.Parent.globalPos.Sub(w.Parent.dragStartPos))
+			w.Pos = w.dragStartPos.Add(w.parent.globalPos.Sub(w.parent.dragStartPos))
 		}
 		//fmt.Printf("local %v %v\n", w, e.Position)
 		return true
@@ -289,36 +342,56 @@ func forEvent[T any](s input.Source, filter event.Filter, body func(evt T) bool)
 }
 
 var (
-	gGtx      layout.Context
-	gToLayout []*Im
-	gTempWm   *WindowManager
+	gGtx        layout.Context
+	gTempWm     *WindowManager
+	gWindows    = make(map[string]*Window)
+	gSavedState = make(map[string]json.RawMessage)
+	gTheme      *material.Theme
 )
+
+const saveFileName = "imgio.json"
+
+func Init(theme *material.Theme) {
+	gTheme = theme
+	toLoad, err := os.ReadFile(saveFileName)
+	if err == nil {
+		json.Unmarshal(toLoad, &gSavedState)
+	}
+}
 
 func SetContext(gtx layout.Context) {
 	gGtx = gtx
 }
 
 func Layout() {
-	for _, im := range gToLayout {
-		im.Layout(gGtx)
-	}
-	gToLayout = nil
 }
 
 func TempSetWm(wm *WindowManager) {
 	gTempWm = wm
 }
 
-var windows = make(map[string]*Window)
-
-func Begin(im *Im, name string, open *bool, body func(im *Im)) {
+func Begin(name string, open *bool, body func(im *Im)) {
 	if open != nil && *open {
-		win, ok := windows[name]
+		win, ok := gWindows[name]
 		if !ok {
-			win = &Window{Parent: gTempWm, Size: f32.Pt(500, 400)}
-			windows[name] = win
+			win = &Window{parent: gTempWm,
+				Size: f32.Pt(500, 400),
+			}
+			if val, ok := gSavedState[name]; ok {
+				json.Unmarshal(val, &win)
+			}
+			win.im = NewIm(gTheme)
+			gWindows[name] = win
 		}
-		body(im)
-		win.Layout(gGtx, im.Layout)
+		win.closed = false
+		win.im.Reset(gGtx)
+		body(win.im)
+		win.Layout(gGtx, win.im.Layout)
+		*open = !win.closed
 	}
+}
+
+func DestroyEvent() {
+	toSave, _ := json.MarshalIndent(gWindows, "", " ")
+	os.WriteFile(saveFileName, toSave, os.ModePerm)
 }

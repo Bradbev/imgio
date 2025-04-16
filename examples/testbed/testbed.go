@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"gioui.org/app"
-	"gioui.org/f32"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/unit"
@@ -53,15 +52,12 @@ func draw(w *app.Window) error {
 
 	th := material.NewTheme()
 	th.Face = "monospace"
+	imgio.Init(th)
 
-	im := imgio.NewIm(th)
-
-	var button2 widget.Clickable
 	wm := &imgio.WindowManager{}
 	imgio.TempSetWm(wm)
-	//win1 := &imgio.Window{Parent: wm, Size: f32.Pt(500, 400)}
-	win2 := &imgio.Window{Parent: wm, Size: f32.Pt(200, 200), Pos: f32.Pt(200, 200)}
 	win_open := true
+	second := true
 	for {
 		// listen for events in the window.
 		switch e := w.Event().(type) {
@@ -70,12 +66,11 @@ func draw(w *app.Window) error {
 		case app.FrameEvent:
 			gtx := app.NewContext(&ops, e)
 			imgio.SetContext(gtx)
-			im.Reset(gtx)
 			wm.Layout(gtx)
 
-			imgio.Begin(im, "debug", &win_open, func(im *imgio.Im) {
+			imgio.Begin("debug", &win_open, func(im *imgio.Im) {
 				im.Text("Hello world %v", 123)
-				if im.Button("Save") {
+				if im.Button("Close This") {
 					fmt.Println("Saved")
 					fmt.Println(inputText)
 					inputText = "foo"
@@ -85,40 +80,18 @@ func draw(w *app.Window) error {
 				im.InputText("string", &inputText)
 				im.SliderFloat("float", &inputFloat, -2, 5)
 			})
-			//im.Layout(gtx)
-			//win1.Layout(gtx, im.Layout)
 
-			if button2.Clicked(gtx) {
-				*&win_open = true
-			}
-			/*
-				win1.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return im.Layout(gtx)
-						return layout.Flex{
-							Axis:    layout.Vertical,
-							Spacing: layout.SpaceEnd,
-						}.Layout(gtx, layout.Rigid(func(gtx C) D {
-							return layout.UniformInset(unit.Dp(5)).Layout(gtx, func(gtx C) D {
-								return material.Button(th, &button, "First").Layout(gtx)
-							})
-						}))
-				})
-			*/
-			win2.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return layout.Flex{
-					Axis:    layout.Vertical,
-					Spacing: layout.SpaceEnd,
-				}.Layout(gtx, layout.Rigid(func(gtx C) D {
-					return layout.UniformInset(unit.Dp(5)).Layout(gtx, func(gtx C) D {
-						return material.Button(th, &button2, "Second").Layout(gtx)
-					})
-				}))
+			imgio.Begin("second", &second, func(im *imgio.Im) {
+				if im.Button("Open Other") {
+					*&win_open = true
+				}
 			})
 
 			e.Frame(gtx.Ops)
 
 		// this is sent when the application is closed.
 		case app.DestroyEvent:
+			imgio.DestroyEvent()
 			return e.Err
 		}
 	}
