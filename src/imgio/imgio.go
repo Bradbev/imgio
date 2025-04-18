@@ -6,8 +6,6 @@ import (
 	"image"
 	"image/color"
 	"os"
-	"regexp"
-	"strings"
 
 	"gioui.org/f32"
 	"gioui.org/gesture"
@@ -55,21 +53,6 @@ func fromCache[T any](i *Im, key string, makeValue func() T) T {
 	return item.(T)
 }
 
-var findHashes = regexp.MustCompile("(.*?)(##.*)").FindStringSubmatch
-
-// From a string, extract the id that should be used uniquely
-// Follows imgui's label conventions of ## and ###
-func (i *Im) getId(str string) (label, id string) {
-	parts := findHashes(str)
-	if len(parts) == 0 {
-		return str, str
-	}
-	if strings.HasPrefix(parts[2], "###") {
-		return parts[1], parts[2]
-	}
-	return parts[1], parts[0]
-}
-
 func (i *Im) Reset(gtx layout.Context) {
 	i.widgetsOrder = i.widgetsOrder[:0]
 	i.gtx = gtx
@@ -112,8 +95,8 @@ func (i *Im) Layout(gtx layout.Context) layout.Dimensions {
 		})
 }
 
-func (i *Im) Button(title string) bool {
-	label, id := i.getId(title)
+func (i *Im) Button(label string) bool {
+	label, id := getId(label, "button")
 	btn := fromCache(i, id, func() *widget.Clickable {
 		return new(widget.Clickable)
 	})
@@ -132,7 +115,7 @@ func (i *Im) text(s string, args ...any) func(gtx layout.Context) layout.Dimensi
 }
 
 func (i *Im) InputText(label string, textVariable *string) {
-	label, id := i.getId(label)
+	label, id := getId(label, "inputtext")
 	lineEditor := fromCache(i, id, func() *widget.Editor {
 		lineEditor := &widget.Editor{
 			SingleLine: true,
@@ -140,10 +123,11 @@ func (i *Im) InputText(label string, textVariable *string) {
 		}
 		i.AddUpdater(func() {
 			for {
-				_, more := lineEditor.Update(i.gtx)
-				if more {
+				_, keepGoing := lineEditor.Update(i.gtx)
+				if keepGoing {
 					*textVariable = lineEditor.Text()
 				} else {
+					// the backing string might have changed, update the editor text
 					if *textVariable != lineEditor.Text() {
 						_, col := lineEditor.CaretPos()
 						lineEditor.SetText(*textVariable)
@@ -181,8 +165,9 @@ func rigid(inset *layout.Inset, w layout.Widget) layout.FlexChild {
 	})
 }
 
-func (i *Im) SliderFloat(label string, float *float64, min, max float64) {
-	label, id := i.getId(label)
+// returns true if value changed
+func (i *Im) SliderFloat(label string, float *float64, min, max float64) bool {
+	label, id := getId(label, "sliderfloat")
 	w := fromCache(i, id, func() layout.Widget {
 		scale := max - min
 		f := widget.Float{}
@@ -195,6 +180,7 @@ func (i *Im) SliderFloat(label string, float *float64, min, max float64) {
 		}
 	})
 	i.AddWidget(w)
+	return true
 }
 
 type WindowManager struct {

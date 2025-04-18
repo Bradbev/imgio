@@ -58,6 +58,7 @@ func draw(w *app.Window) error {
 	imgio.TempSetWm(wm)
 	win_open := true
 	second := true
+	var col [3]float64 = [3]float64{1.0, 0.2, 0.4}
 	for {
 		// listen for events in the window.
 		switch e := w.Event().(type) {
@@ -79,6 +80,8 @@ func draw(w *app.Window) error {
 
 				im.InputText("string", &inputText)
 				im.SliderFloat("float", &inputFloat, -2, 5)
+				im.ColorEdit3("Color", &col)
+				im.Text("%f %f %f", col[0], col[1], col[2])
 			})
 
 			imgio.Begin("second", &second, func(im *imgio.Im) {
