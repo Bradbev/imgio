@@ -49,16 +49,16 @@ func draw(w *app.Window) error {
 
 	var inputText string
 	var inputFloat float64
+	var inputFloat2 float64
+	var b1 widget.Clickable
+	var b2 widget.Clickable
+	var f widget.Float
 
-	th := material.NewTheme()
-	th.Face = "monospace"
-	imgio.Init(th)
+	imgio.Init()
 
 	wm := &imgio.WindowManager{}
 	imgio.TempSetWm(wm)
 	win_open := true
-	second := true
-	var col [3]float64 = [3]float64{1.0, 0.2, 0.4}
 	for {
 		// listen for events in the window.
 		switch e := w.Event().(type) {
@@ -75,19 +75,28 @@ func draw(w *app.Window) error {
 					fmt.Println("Saved")
 					fmt.Println(inputText)
 					inputText = "foo"
-					*&win_open = false
+					//win_open = false
 				}
 
-				im.InputText("string", &inputText)
+				im.WithSameLine(func(im *imgio.Im) {
+					//im.Text("A")
+					//	im.InputText("string", &inputText)
+					im.Button("A")
+					im.Button("B")
+					im.SliderFloat("float", &inputFloat2, 0, 1)
+					im.AddWidget(material.Slider(imgio.GetTheme(), &f).Layout)
+					//im.AddWidget(material.Slider(imgio.GetTheme(), &f2).Layout)
+					//im.Text("B")
+				})
+				im.AddWidget(func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{}.Layout(gtx,
+						layout.Rigid(material.Button(imgio.GetTheme(), &b1, "A").Layout),
+						layout.Rigid(material.Button(imgio.GetTheme(), &b2, "B").Layout),
+					)
+				})
 				im.SliderFloat("float", &inputFloat, -2, 5)
-				im.ColorEdit3("Color", &col)
-				im.Text("%f %f %f", col[0], col[1], col[2])
-			})
+				im.ColorEdit("Color", &imgio.GetTheme().Bg)
 
-			imgio.Begin("second", &second, func(im *imgio.Im) {
-				if im.Button("Open Other") {
-					*&win_open = true
-				}
 			})
 
 			e.Frame(gtx.Ops)
