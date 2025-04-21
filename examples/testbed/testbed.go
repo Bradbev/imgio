@@ -19,7 +19,7 @@ func main() {
 		// create new window
 		w := new(app.Window)
 		w.Option(app.Title("Egg timer"))
-		w.Option(app.Size(unit.Dp(600), unit.Dp(600)))
+		w.Option(app.Size(unit.Dp(1200), unit.Dp(1200)))
 		if err := draw(w); err != nil {
 			log.Fatal(err)
 		}
@@ -49,10 +49,12 @@ func draw(w *app.Window) error {
 
 	var inputText string
 	var inputFloat float64
-	var inputFloat2 float64
-	var b1 widget.Clickable
-	var b2 widget.Clickable
-	var f widget.Float
+	/*
+		var inputFloat2 float64
+		var b1 widget.Clickable
+		var b2 widget.Clickable
+		var f widget.Float
+	*/
 
 	imgio.Init()
 
@@ -77,24 +79,36 @@ func draw(w *app.Window) error {
 					inputText = "foo"
 					//win_open = false
 				}
-
+				im.InputText("string", &inputText)
 				im.WithSameLine(func(im *imgio.Im) {
-					//im.Text("A")
-					//	im.InputText("string", &inputText)
 					im.Button("A")
 					im.Button("B")
-					im.SliderFloat("float", &inputFloat2, 0, 1)
-					im.AddWidget(material.Slider(imgio.GetTheme(), &f).Layout)
-					//im.AddWidget(material.Slider(imgio.GetTheme(), &f2).Layout)
-					//im.Text("B")
 				})
-				im.AddWidget(func(gtx layout.Context) layout.Dimensions {
-					return layout.Flex{}.Layout(gtx,
-						layout.Rigid(material.Button(imgio.GetTheme(), &b1, "A").Layout),
-						layout.Rigid(material.Button(imgio.GetTheme(), &b2, "B").Layout),
-					)
-				})
+				im.Button("C")
+				im.SameLine()
+				im.Button("D")
+				im.SameLine()
+				/*
+
+					im.WithSameLine(func(im *imgio.Im) {
+						//im.Text("A")
+						im.Button("A")
+						im.Button("B")
+						im.SliderFloat("float2", &inputFloat2, 0, 1)
+						im.AddWidget(material.Slider(imgio.GetTheme(), &f).Layout)
+						//im.AddWidget(material.Slider(imgio.GetTheme(), &f2).Layout)
+						//im.Text("B")
+					})
+					im.AddWidget(func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{}.Layout(gtx,
+							layout.Rigid(material.Button(imgio.GetTheme(), &b1, "A").Layout),
+							layout.Rigid(material.Button(imgio.GetTheme(), &b2, "B").Layout),
+						)
+					})
+				*/
 				im.SliderFloat("float", &inputFloat, -2, 5)
+				im.SameLine()
+				im.Button("E")
 				im.ColorEdit("Color", &imgio.GetTheme().Bg)
 
 			})

@@ -20,13 +20,26 @@ import (
 // needs to have an escape hatch
 type Im struct {
 	widgets      map[string]any
-	widgetsOrder []layout.Widget
+	widgetsOrder []layout.FlexChild
+	widgetsHoriz []layout.FlexChild
 	updaters     []func()
 
-	theme *material.Theme
-	axis  layout.Axis
-	gtx   layout.Context
+	samelineActive  bool
+	singleSameLine  bool
+	lastAddedWidget layout.Widget
+	theme           *material.Theme
+	axis            layout.Axis
+	flex            FlexMode
+	gtx             layout.Context
 }
+
+type FlexMode uint8
+
+const (
+	FlexModeDefault FlexMode = iota
+	FlexModeFlex
+	FlexModeRigid
+)
 
 func NewIm(theme *material.Theme) *Im {
 	im := &Im{
@@ -38,26 +51,32 @@ func NewIm(theme *material.Theme) *Im {
 }
 
 func (i *Im) WithSameLine(body func(im *Im)) {
+	if i.widgetsHoriz != nil && i.singleSameLine == false && i.samelineActive == false {
+		i.EndLine()
+	}
+	samelineActive := i.samelineActive
+	i.samelineActive = true
+	body(i)
+	i.samelineActive = samelineActive
+}
 
-	newIm := fromCache(i, "sameline", func() *Im {
-		im := NewIm(i.theme)
-		im.axis = layout.Horizontal
-		return im
-	})
-	newIm.Reset(i.gtx)
-	body(newIm)
-	i.AddWidget(newIm.Layout)
-	/*
-	   var children []layout.FlexChild
+func (i *Im) SameLine() {
+	if i.widgetsHoriz == nil {
+		// Re-add the last widget because the flex changes
+		i.singleSameLine = true
+		i.AddWidget(i.lastAddedWidget)
+		// remove that last widget from the vertical list
+		wo := i.widgetsOrder
+		i.widgetsOrder = wo[1 : len(wo)-1]
+	}
+	i.singleSameLine = true
+}
 
-	   	for _, d := range newIm.widgetsOrder {
-	   		children = append(children, layout.Rigid(d))
-	   	}
-
-	   	i.AddWidget(func(gtx layout.Context) layout.Dimensions {
-	   		return layout.Flex{}.Layout(gtx, children...)
-	   	})
-	*/
+func (i *Im) WithFlexMode(mode FlexMode, body func(im *Im)) {
+	current := i.flex
+	i.flex = mode
+	body(i)
+	i.flex = current
 }
 
 func (i *Im) Reset(gtx layout.Context) {
@@ -69,14 +88,51 @@ func (i *Im) Reset(gtx layout.Context) {
 	}
 }
 
-func (i *Im) AddWidget(w layout.Widget) {
+func (i *Im) AddWidget(widget layout.Widget) {
 	withInset := func(gtx layout.Context) layout.Dimensions {
-		return layout.Inset{
-			Top:    unit.Dp(2),
-			Bottom: unit.Dp(2),
-		}.Layout(gtx, w)
+		return layout.UniformInset(unit.Dp(2)).Layout(gtx, widget)
+		/*
+			return layout.Inset{
+				Top:    unit.Dp(2),
+				Bottom: unit.Dp(2),
+			}.Layout(gtx, win)
+		*/
 	}
-	i.widgetsOrder = append(i.widgetsOrder, withInset)
+	w := withInset
+
+	var flexchild layout.FlexChild
+
+	switch i.flex {
+	case FlexModeFlex:
+		flexchild = layout.Flexed(1, w)
+	case FlexModeRigid:
+		flexchild = layout.Rigid(w)
+	case FlexModeDefault:
+		if i.samelineActive || i.singleSameLine {
+			flexchild = layout.Flexed(1, w)
+		} else {
+			flexchild = layout.Rigid(w)
+		}
+	}
+	if i.samelineActive || i.singleSameLine {
+		i.widgetsHoriz = append(i.widgetsHoriz, flexchild)
+		i.singleSameLine = false
+	} else {
+		i.EndLine()
+		i.widgetsOrder = append(i.widgetsOrder, flexchild)
+	}
+	i.lastAddedWidget = widget
+}
+
+func (i *Im) EndLine() {
+	if i.widgetsHoriz != nil {
+		horiz := i.widgetsHoriz
+		w := func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx, horiz...)
+		}
+		i.widgetsOrder = append(i.widgetsOrder, layout.Rigid(w))
+		i.widgetsHoriz = nil
+	}
 }
 
 func (i *Im) AddUpdater(updater func()) {
@@ -84,13 +140,10 @@ func (i *Im) AddUpdater(updater func()) {
 }
 
 func (i *Im) Layout(gtx layout.Context) layout.Dimensions {
-	var children []layout.FlexChild
-	for _, d := range i.widgetsOrder {
-		children = append(children, layout.Rigid(d))
-	}
+	i.EndLine()
 	spacing := layout.SpaceEnd
 	if i.axis == layout.Horizontal {
-		return layout.Flex{Spacing: layout.SpaceEvenly}.Layout(gtx, children...)
+		return layout.Flex{Spacing: layout.SpaceEvenly}.Layout(gtx, i.widgetsOrder...)
 	}
 	return layout.Inset{
 		Left:  unit.Dp(5),
@@ -102,7 +155,7 @@ func (i *Im) Layout(gtx layout.Context) layout.Dimensions {
 				Spacing: spacing,
 			}.Layout(
 				gtx,
-				children...)
+				i.widgetsOrder...)
 		})
 }
 
@@ -150,7 +203,7 @@ func (i *Im) InputText(label string, textVariable *string) {
 		return lineEditor
 	})
 
-	inset := layout.UniformInset(unit.Dp(8))
+	inset := layout.UniformInset(unit.Dp(6))
 	editBox := layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 		e := material.Editor(i.theme, lineEditor, "")
 		border := widget.Border{Color: color.NRGBA{A: 0xff}, CornerRadius: unit.Dp(2), Width: unit.Dp(2)}
@@ -183,13 +236,21 @@ func (i *Im) SliderFloat(label string, float *float64, min, max float64) bool {
 		f := widget.Float{Value: float32(*float)}
 		return func(gtx layout.Context) layout.Dimensions {
 			*float = float64(f.Value)*scale + min
-			inset := layout.UniformInset(unit.Dp(8))
-			return layout.Flex{}.Layout(gtx,
-				layout.Flexed(1, material.Slider(i.theme, &f).Layout),
-				rigid(&inset, i.text("%s % 7.3f", label, *float)))
+			return material.Slider(i.theme, &f).Layout(gtx)
+			/*
+				inset := layout.UniformInset(unit.Dp(0))
+				return layout.Flex{}.Layout(gtx,
+					layout.Flexed(1, material.Slider(i.theme, &f).Layout),
+					rigid(&inset, i.text("%s % 7.3f", label, *float)))
+			*/
 		}
 	})
-	i.AddWidget(w)
+	i.WithSameLine(func(im *Im) {
+		i.AddWidget(w)
+		i.WithFlexMode(FlexModeRigid, func(im *Im) {
+			i.Text("%s % 7.3f", label, *float)
+		})
+	})
 	return true
 }
 

@@ -15,12 +15,12 @@ var findHashes = regexp.MustCompile("(.*?)(##.*)").FindStringSubmatch
 func getId(str, idType string) (label, id string) {
 	parts := findHashes(str)
 	if len(parts) == 0 {
-		return str, str
+		return str, str + idType
 	}
 	if strings.HasPrefix(parts[2], "###") {
-		return parts[1], parts[2]
+		return parts[1], parts[2] + idType
 	}
-	return parts[1], parts[0]
+	return parts[1], parts[0] + idType
 }
 
 // forEvent will filter s according to filter and try to convert any matching events

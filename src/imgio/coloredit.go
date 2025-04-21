@@ -64,10 +64,10 @@ func (im *Im) ColorEdit(label string, col *color.NRGBA) bool {
 		return ret
 	})
 
-	im.SliderFloat("R", &c.r, 0, 1)
-	im.SliderFloat("G", &c.g, 0, 1)
-	im.SliderFloat("B", &c.b, 0, 1)
-	im.SliderFloat("A", &c.a, 0, 1)
+	im.SliderFloat("R##"+label, &c.r, 0, 1)
+	im.SliderFloat("G##"+label, &c.g, 0, 1)
+	im.SliderFloat("B##"+label, &c.b, 0, 1)
+	im.SliderFloat("A##"+label, &c.a, 0, 1)
 	im.Text(label)
 	im.AddWidget(c.w)
 
