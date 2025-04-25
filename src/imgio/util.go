@@ -1,11 +1,14 @@
 package imgio
 
 import (
+	"math"
 	"regexp"
 	"strings"
 
+	"gioui.org/f32"
 	"gioui.org/io/event"
 	"gioui.org/io/input"
+	"golang.org/x/exp/constraints"
 )
 
 var findHashes = regexp.MustCompile("(.*?)(##.*)").FindStringSubmatch
@@ -49,4 +52,22 @@ func fromCache[T any](i *Im, key string, makeValue func() T) T {
 		i.widgets[key] = item
 	}
 	return item.(T)
+}
+
+func trunc32(f float32) float32 {
+	return float32(math.Trunc(float64(f)))
+}
+
+func truncPt(p f32.Point) f32.Point {
+	return f32.Pt(trunc32(p.X), trunc32(p.Y))
+}
+
+func clamp[T constraints.Float | constraints.Integer](v, min, max T) T {
+	if v < min {
+		return min
+	}
+	if v > max {
+		return max
+	}
+	return v
 }

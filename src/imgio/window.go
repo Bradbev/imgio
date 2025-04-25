@@ -71,9 +71,14 @@ func (w *Window) Layout(gtx layout.Context, child func(gtx layout.Context) layou
 		paint.PaintOp{}.Add(gtx.Ops)
 	}
 	// draw the outline with a full rect and then an inset rect
-	rect(image.Rect(0, 0, int(w.Size.X), int(w.Size.Y)), gTheme.ContrastBg)
+	//rect(image.Rect(0, 0, int(w.Size.X), int(w.Size.Y)), gTheme.ContrastBg)
 	rect(image.Rect(2, 2, int(w.Size.X-2), int(w.Size.Y-2)), gTheme.Bg)
 	// clip subsequent draws to the window area
+	r := image.Rectangle{Max: w.Size.Round()}
+	paint.FillShape(gtx.Ops, gTheme.ContrastBg, clip.Stroke{
+		Path:  clip.UniformRRect(r, 0).Path(gtx.Ops),
+		Width: float32(gtx.Metric.Dp(2)),
+	}.Op())
 	defer clip.Rect(image.Rect(2, 2, int(w.Size.X-2), int(w.Size.Y-2))).Push(gtx.Ops).Pop()
 
 	// titlebar
@@ -110,7 +115,7 @@ func (w *Window) Layout(gtx layout.Context, child func(gtx layout.Context) layou
 		p.Line(f32.Pt(0, -40))
 		p.Line(f32.Pt(-40, 40))
 		defer clip.Outline{Path: p.End()}.Op().Push(gtx.Ops).Pop()
-		paint.ColorOp{Color: color.NRGBA{B: 0x80, A: 0xFF}}.Add(gtx.Ops)
+		paint.ColorOp{Color: gTheme.ContrastBg}.Add(gtx.Ops)
 		paint.PaintOp{}.Add(gtx.Ops)
 		event.Op(gtx.Ops, &w.Pos)
 	}()
@@ -126,6 +131,7 @@ func (w *Window) Layout(gtx layout.Context, child func(gtx layout.Context) layou
 			w.dragStartSize = w.Size
 		case pointer.Drag:
 			w.Size = w.dragStartSize.Add(w.parent.globalPos.Sub(w.parent.dragStartPos))
+			w.Size = truncPt(w.Size)
 		}
 		return true
 	})

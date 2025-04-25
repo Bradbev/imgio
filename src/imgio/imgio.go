@@ -90,13 +90,7 @@ func (i *Im) Reset(gtx layout.Context) {
 
 func (i *Im) AddWidget(widget layout.Widget) {
 	withInset := func(gtx layout.Context) layout.Dimensions {
-		return layout.UniformInset(unit.Dp(2)).Layout(gtx, widget)
-		/*
-			return layout.Inset{
-				Top:    unit.Dp(2),
-				Bottom: unit.Dp(2),
-			}.Layout(gtx, win)
-		*/
+		return gImTheme.WidgetInset.Layout(gtx, widget)
 	}
 	w := withInset
 
@@ -164,7 +158,9 @@ func (i *Im) Button(label string) bool {
 	btn := fromCache(i, id, func() *widget.Clickable {
 		return new(widget.Clickable)
 	})
-	i.AddWidget(material.Button(i.theme, btn, label).Layout)
+	b := material.Button(i.theme, btn, label)
+	b.Inset = gImTheme.ButtonInset
+	i.AddWidget(b.Layout)
 	return btn.Clicked(i.gtx)
 }
 
@@ -184,6 +180,7 @@ func (i *Im) InputText(label string, textVariable *string) {
 			SingleLine: true,
 			Submit:     true,
 		}
+		// TODO not needed.  Fold the update into the layout func
 		i.AddUpdater(func() {
 			for {
 				_, keepGoing := lineEditor.Update(i.gtx)
@@ -228,46 +225,28 @@ func rigid(inset *layout.Inset, w layout.Widget) layout.FlexChild {
 	})
 }
 
-// returns true if value changed
-func (i *Im) SliderFloat(label string, float *float64, min, max float64) bool {
-	label, id := getId(label, "sliderfloat")
-	w := fromCache(i, id, func() layout.Widget {
-		scale := max - min
-		f := widget.Float{Value: float32(*float)}
-		return func(gtx layout.Context) layout.Dimensions {
-			*float = float64(f.Value)*scale + min
-			return material.Slider(i.theme, &f).Layout(gtx)
-			/*
-				inset := layout.UniformInset(unit.Dp(0))
-				return layout.Flex{}.Layout(gtx,
-					layout.Flexed(1, material.Slider(i.theme, &f).Layout),
-					rigid(&inset, i.text("%s % 7.3f", label, *float)))
-			*/
-		}
-	})
-	i.WithSameLine(func(im *Im) {
-		i.AddWidget(w)
-		i.WithFlexMode(FlexModeRigid, func(im *Im) {
-			i.Text("%s % 7.3f", label, *float)
-		})
-	})
-	return true
-}
-
 var (
 	gGtx        layout.Context
 	gTempWm     *WindowManager
 	gWindows    = make(map[string]*Window)
 	gSavedState = make(map[string]json.RawMessage)
 	gTheme      *material.Theme
+	gImTheme    Theme
+	gApp        App
 )
 
 const saveFileName = "imgio.json"
 const themeFileName = "theme.json"
 
-func Init() {
+type App interface {
+	Invalidate()
+}
+
+func Init(a App) {
+	gApp = a
 	gTheme = material.NewTheme()
 	gTheme.Face = "monospace"
+	gImTheme.Palette = &gTheme.Palette
 
 	toLoad, err := os.ReadFile(saveFileName)
 	if err == nil {
@@ -276,8 +255,7 @@ func Init() {
 
 	toLoad, err = os.ReadFile(themeFileName)
 	if err == nil {
-		err = json.Unmarshal(toLoad, &gTheme.Palette)
-		println(err)
+		json.Unmarshal(toLoad, &gImTheme)
 	}
 }
 
@@ -324,6 +302,6 @@ func DestroyEvent() {
 	toSave, _ := json.MarshalIndent(gWindows, "", " ")
 	os.WriteFile(saveFileName, toSave, os.ModePerm)
 
-	toSave, _ = json.MarshalIndent(gTheme.Palette, "", " ")
+	toSave, _ = json.MarshalIndent(gImTheme, "", " ")
 	os.WriteFile(themeFileName, toSave, os.ModePerm)
 }
