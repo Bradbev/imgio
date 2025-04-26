@@ -8,8 +8,14 @@ import (
 	"gioui.org/f32"
 	"gioui.org/io/event"
 	"gioui.org/io/input"
+	"gioui.org/layout"
 	"golang.org/x/exp/constraints"
 )
+
+func LineHeight(gtx layout.Context) int {
+	b := gImTheme.ButtonInset
+	return gtx.Dp(gtx.Metric.SpToDp(gTheme.TextSize) + b.Top + b.Bottom)
+}
 
 var findHashes = regexp.MustCompile("(.*?)(##.*)").FindStringSubmatch
 

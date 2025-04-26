@@ -31,6 +31,8 @@ type Im struct {
 	axis            layout.Axis
 	flex            FlexMode
 	gtx             layout.Context
+	FlexWeight      float32
+	minConstraint   *layout.Constraints
 }
 
 type FlexMode uint8
@@ -43,9 +45,10 @@ const (
 
 func NewIm(theme *material.Theme) *Im {
 	im := &Im{
-		widgets: map[string]any{},
-		theme:   theme,
-		axis:    layout.Vertical,
+		widgets:    map[string]any{},
+		theme:      theme,
+		axis:       layout.Vertical,
+		FlexWeight: 1,
 	}
 	return im
 }
@@ -79,6 +82,13 @@ func (i *Im) WithFlexMode(mode FlexMode, body func(im *Im)) {
 	i.flex = current
 }
 
+func (i *Im) WithMinConstraints(c layout.Constraints, body func(im *Im)) {
+	current := i.minConstraint
+	i.minConstraint = &c
+	body(i)
+	i.minConstraint = current
+}
+
 func (i *Im) Reset(gtx layout.Context) {
 	i.widgetsOrder = i.widgetsOrder[:0]
 	i.gtx = gtx
@@ -89,6 +99,15 @@ func (i *Im) Reset(gtx layout.Context) {
 }
 
 func (i *Im) AddWidget(widget layout.Widget) {
+	if i.minConstraint != nil {
+		c := *i.minConstraint
+		w := widget
+		widget = func(gtx layout.Context) layout.Dimensions {
+			gtx.Constraints.Min.X = max(gtx.Constraints.Min.X, c.Min.X)
+			gtx.Constraints.Min.Y = max(gtx.Constraints.Min.Y, c.Min.Y)
+			return w(gtx)
+		}
+	}
 	withInset := func(gtx layout.Context) layout.Dimensions {
 		return gImTheme.WidgetInset.Layout(gtx, widget)
 	}
@@ -98,12 +117,12 @@ func (i *Im) AddWidget(widget layout.Widget) {
 
 	switch i.flex {
 	case FlexModeFlex:
-		flexchild = layout.Flexed(1, w)
+		flexchild = layout.Flexed(i.FlexWeight, w)
 	case FlexModeRigid:
 		flexchild = layout.Rigid(w)
 	case FlexModeDefault:
 		if i.samelineActive || i.singleSameLine {
-			flexchild = layout.Flexed(1, w)
+			flexchild = layout.Flexed(i.FlexWeight, w)
 		} else {
 			flexchild = layout.Rigid(w)
 		}
@@ -116,6 +135,7 @@ func (i *Im) AddWidget(widget layout.Widget) {
 		i.widgetsOrder = append(i.widgetsOrder, flexchild)
 	}
 	i.lastAddedWidget = widget
+	i.FlexWeight = 1
 }
 
 func (i *Im) EndLine() {
@@ -170,7 +190,7 @@ func (i *Im) Text(s string, args ...any) {
 
 func (i *Im) text(s string, args ...any) func(gtx layout.Context) layout.Dimensions {
 	s = fmt.Sprintf(s, args...)
-	return material.Body1(i.theme, s).Layout
+	return material.Label(i.theme, gTheme.TextSize, s).Layout
 }
 
 func (i *Im) InputText(label string, textVariable *string) {

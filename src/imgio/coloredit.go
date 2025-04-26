@@ -52,24 +52,30 @@ func (im *Im) ColorEdit(label string, col *color.NRGBA) bool {
 			a: int64(col.A),
 		}
 		ret.w = func(gtx layout.Context) layout.Dimensions {
+			h := LineHeight(gtx)
+			gtx.Constraints.Min.Y = h
 			ops := im.gtx.Ops
-			defer clip.Rect(image.Rect(0, 0, 40, 40)).Push(ops).Pop()
+			defer clip.Rect(image.Rect(0, 0, h, h)).Push(ops).Pop()
 			r, g, b, a := uint8(ret.r), uint8(ret.g), uint8(ret.b), uint8(ret.a)
 			*col = color.NRGBA{R: r, G: g, B: b, A: a}
 			paint.ColorOp{Color: *col}.Add(ops)
 			paint.PaintOp{}.Add(ops)
-			return layout.Dimensions{Size: image.Pt(40, 40)}
+			return layout.Dimensions{Size: image.Pt(h, h)}
 		}
 		return ret
 	})
 
 	im.WithSameLine(func(im *Im) {
-		im.DragInt("R##"+label, &c.r, 1, 0, 255, "R:%d")
-		im.DragInt("G##"+label, &c.g, 1, 0, 255, "G:%d")
-		im.DragInt("B##"+label, &c.b, 1, 0, 255, "B:%d")
-		im.DragInt("A##"+label, &c.a, 1, 0, 255, "A:%d")
+		im.WithFlexMode(FlexModeRigid, func(im *Im) {
+			im.WithMinConstraints(layout.Constraints{Min: image.Pt(120, LineHeight(im.gtx))}, func(im *Im) {
+				im.DragInt("G##"+label, &c.g, 1, 0, 255, "G:%d")
+				im.DragInt("B##"+label, &c.b, 1, 0, 255, "B:%d")
+				im.DragInt("R##"+label, &c.r, 1, 0, 255, "R:%d")
+				im.DragInt("A##"+label, &c.a, 1, 0, 255, "A:%d")
+				im.AddWidget(c.w)
+			})
+		})
 		im.Text(label)
-		im.AddWidget(c.w)
 	})
 
 	return true

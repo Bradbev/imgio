@@ -34,11 +34,8 @@ func draw(w *app.Window) error {
 	var ops op.Ops
 
 	var (
-		inputText  string
-		inputFloat float64
-		i          int64
+		inputText string
 	)
-	i = 51
 
 	/*
 		var inputFloat2 float64
@@ -74,10 +71,9 @@ func draw(w *app.Window) error {
 				im.WithSameLine(func(im *imgio.Im) {
 					im.Button("A")
 					im.Button("B")
+					im.Button("C")
+					im.Button("D")
 				})
-				im.Button("C")
-				im.SameLine()
-				im.Button("D")
 				/*
 
 					im.WithSameLine(func(im *imgio.Im) {
@@ -99,11 +95,11 @@ func draw(w *app.Window) error {
 				//im.SliderFloat("float", &inputFloat, -2, 5)
 				im.SameLine()
 				im.Button("E")
-				im.ColorEdit("Color", &imgio.GetTheme().Bg)
-				im.DragInt("DragInt", &i, 1, 0, 255, "R:%d")
-				if im.DragFloat("DragFlt", &inputFloat, 5, 0, 100, "%.2f") {
-					im.Text("Changing")
-				}
+				im.ColorEdit("Bg", &imgio.GetTheme().Bg)
+				im.ColorEdit("ContrastBg", &imgio.GetTheme().ContrastBg)
+				im.ColorEdit("Fg", &imgio.GetTheme().Fg)
+				im.ColorEdit("ContrastFg", &imgio.GetTheme().ContrastFg)
+				im.Text("Test text")
 			})
 			imgio.ThemeEdit(&win_open)
 
